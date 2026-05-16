@@ -1,0 +1,79 @@
+[tool.poetry]
+name = "okchat"
+version = "0.1.0"
+description = "OkChat — Multi-channel Conversational AI API"
+authors = ["Carlos Arguello <carlos@okchat.io>"]
+readme = "README.md"
+packages = [{ include = "okchat", from = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+
+# ── Web Framework ─────────────────────────────────────────────────────────────
+fastapi = "^0.115.0"
+uvicorn = { version = "^0.32.0", extras = ["standard"] }
+gunicorn = "^23.0.0"
+
+# ── Data Validation ───────────────────────────────────────────────────────────
+pydantic = "^2.10.0"
+pydantic-settings = "^2.6.0"
+
+# ── Database ──────────────────────────────────────────────────────────────────
+sqlalchemy = { version = "^2.0.36", extras = ["asyncio"] }
+asyncpg = "^0.30.0"
+alembic = "^1.14.0"
+
+# ── Cache / Pub-Sub ───────────────────────────────────────────────────────────
+redis = { version = "^5.2.0", extras = ["hiredis"] }
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+structlog = "^24.4.0"
+
+# ── HTTP Client ───────────────────────────────────────────────────────────────
+httpx = "^0.28.0"
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+python-jose = { version = "^3.3.0", extras = ["cryptography"] }
+passlib = { version = "^1.7.4", extras = ["bcrypt"] }
+
+# ── Workers ───────────────────────────────────────────────────────────────────
+celery = { version = "^5.4.0", extras = ["redis"] }
+
+# ── Rate Limiting ─────────────────────────────────────────────────────────────
+slowapi = "^0.1.9"
+
+# ── Observability ─────────────────────────────────────────────────────────────
+opentelemetry-sdk = "^1.28.0"
+opentelemetry-instrumentation-fastapi = "^0.49b0"
+opentelemetry-exporter-otlp = "^1.28.0"
+prometheus-fastapi-instrumentator = "^7.0.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.0"
+pytest-asyncio = "^0.24.0"
+pytest-cov = "^6.0.0"
+httpx = "^0.28.0"           # For TestClient
+testcontainers = { version = "^4.8.0", extras = ["postgres", "redis"] }
+ruff = "^0.8.0"
+mypy = "^1.13.0"
+pre-commit = "^4.0.0"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+select = ["E", "F", "I", "UP", "B", "SIM", "TCH"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "--cov=src --cov-report=term-missing --cov-fail-under=80"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -1,0 +1,141 @@
+# ────────────────────────────────────────────────────────────────────────────
+# OkChat — docker-compose for local development
+# Hot reload enabled via volume mount.
+# Includes: API, PostgreSQL, Redis, pgAdmin, Redis Commander
+# ────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── FastAPI Application ──────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder          # Use builder stage for dev (has dev tools)
+    command: >
+      uvicorn okchat.main:app
+      --host 0.0.0.0
+      --port 8000
+      --reload
+      --reload-dir src
+      --log-level debug
+    volumes:
+      - ./src:/app/src          # Hot reload — no rebuild needed on code change
+    ports:
+      - "8000:8000"
+    environment:
+      PYTHONPATH: /app/src
+      OKCHAT_ENVIRONMENT: local
+      OKCHAT_DEBUG: "true"
+      OKCHAT_LOG_LEVEL: DEBUG
+      OKCHAT_DB__URL: postgresql+asyncpg://okchat:okchat@postgres:5432/okchat
+      OKCHAT_REDIS__URL: redis://redis:6379/0
+      OKCHAT_AUTH__SECRET_KEY: local-dev-secret-key-change-in-production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - okchat-network
+
+  # ── Celery Worker ─────────────────────────────────────────────────────────
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    command: >
+      celery -A okchat.infrastructure.workers.celery worker
+      --loglevel=info
+      --concurrency=4
+      -Q default,high_priority
+    volumes:
+      - ./src:/app/src
+    environment:
+      PYTHONPATH: /app/src
+      OKCHAT_ENVIRONMENT: local
+      OKCHAT_DB__URL: postgresql+asyncpg://okchat:okchat@postgres:5432/okchat
+      OKCHAT_REDIS__URL: redis://redis:6379/0
+      OKCHAT_AUTH__SECRET_KEY: local-dev-secret-key-change-in-production
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped
+    networks:
+      - okchat-network
+
+  # ── PostgreSQL ────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: okchat
+      POSTGRES_PASSWORD: okchat
+      POSTGRES_DB: okchat
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U okchat -d okchat"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - okchat-network
+
+  # ── Redis ─────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - okchat-network
+
+  # ── pgAdmin (Dev only) ────────────────────────────────────────────────────
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      PGADMIN_DEFAULT_EMAIL: dev@okchat.io
+      PGADMIN_DEFAULT_PASSWORD: devpassword
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    profiles:
+      - tools              # Only starts with: docker compose --profile tools up
+    networks:
+      - okchat-network
+
+  # ── Redis Commander (Dev only) ────────────────────────────────────────────
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    profiles:
+      - tools
+    networks:
+      - okchat-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  okchat-network:
+    driver: bridge
